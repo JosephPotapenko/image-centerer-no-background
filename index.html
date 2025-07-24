@@ -1,37 +1,150 @@
-<!-- TO ACHIEVE THIS TYPE IN "!" AND PRESS "TAB" -->
 <!DOCTYPE html>
-<!-- html below is a tag pair. "lang" is a language setting and is set to English. Html has 2 children: head and body -->
 <html lang="en">
-<!-- head below is a tag pair. It contains metadata about the document and links to external resources. -->
 <head>
-    <!-- meta below is a tag pair. It provides metadata about the HTML document. chrset = "UTF-8" is pulling all latin charachters-->
-    <meta charset="UTF-8">
-    <!-- Tag pair. Provides metadata about the HTML document. name = "viewport" is setting the viewport to the device's width and initial scale to 1.0 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Dev Starter</title>
-
-    <!-- Favicons -->
-    <link rel="icon" type="image/png" href="/favicons/favicon-48x48.png" sizes="48x48" />
-    <link rel="icon" type="image/svg+xml" href="/favicons/favicon.svg" />
-    <link rel="shortcut icon" href="/favicons/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-title" content="Web Dev Starter" />
-    <link rel="manifest" href="/favicons/site.webmanifest" />    
-
-    <!-- Stylesheet -->
-    <link rel="stylesheet" href="style.css">
-
-    <!-- JavaScript -->
-     <!-- script:src and then press tab for shortcut-->
-    <script src="script.js" defer> </script>
-
+  <meta charset="UTF-8">
+  <title>Image Centering with 10% Padding</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #f9f9f9; padding: 20px; }
+    canvas { display: none; }
+    .bar-container { width: 400px; height: 20px; background: #ddd; margin: 10px auto; }
+    .bar { height: 100%; background: #76c7c0; width: 0%; transition: width 0.3s ease; }
+    button, input[type="file"] { margin: 10px; padding: 10px 20px; font-size: 16px; }
+  </style>
 </head>
-
-<!-- body below is a tag pair. It contains the content of the document. -->
 <body>
 
-    <h1>Web Dev Starter</h1>
+  <h2>Center & Download Each Image (400x400 with 10% Border)</h2>
 
+  <div>
+    <label><strong>Upload Single Image:</strong>
+      <input type="file" id="singleUpload" accept="image/*">
+    </label><br>
+    <label><strong>Upload Folder of Images:</strong>
+      <input type="file" id="folderUpload" webkitdirectory multiple accept="image/*">
+    </label>
+  </div>
+
+  <div class="bar-container"><div id="uploadBar" class="bar"></div></div>
+  <button id="process">Process & Download</button>
+  <div class="bar-container"><div id="processBar" class="bar"></div></div>
+
+  <canvas id="canvas" width="400" height="400"></canvas>
+
+  <script>
+    const singleInput = document.getElementById('singleUpload');
+    const folderInput = document.getElementById('folderUpload');
+    const processBtn = document.getElementById('process');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const uploadBar = document.getElementById('uploadBar');
+    const processBar = document.getElementById('processBar');
+
+    let files = [];
+    let mode = null;
+
+    function setBar(bar, percent) {
+      bar.style.width = percent + '%';
+    }
+
+    singleInput.addEventListener('change', (e) => {
+      files = e.target.files;
+      if (files.length > 0) {
+        mode = 'single';
+        setBar(uploadBar, 100);
+      }
+    });
+
+    folderInput.addEventListener('change', (e) => {
+      files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
+      if (files.length > 0) {
+        mode = 'folder';
+        setBar(uploadBar, 100);
+      }
+    });
+
+    function loadImageFromFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = reader.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function processImage(image) {
+      const temp = document.createElement('canvas');
+      temp.width = image.width;
+      temp.height = image.height;
+      const tempCtx = temp.getContext('2d');
+      tempCtx.drawImage(image, 0, 0);
+
+      const data = tempCtx.getImageData(0, 0, temp.width, temp.height).data;
+
+      let minX = temp.width, minY = temp.height, maxX = 0, maxY = 0;
+
+      for (let y = 0; y < temp.height; y++) {
+        for (let x = 0; x < temp.width; x++) {
+          const idx = (y * temp.width + x) * 4;
+          if (data[idx + 3] > 0) {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      const cropW = maxX - minX;
+      const cropH = maxY - minY;
+
+      // Apply 10% padding = only use 80% of canvas for image
+      const paddingRatio = 0.1;
+      const usableWidth = 400 * (1 - 2 * paddingRatio); // 80%
+      const usableHeight = 400 * (1 - 2 * paddingRatio);
+
+      const scale = Math.min(usableWidth / cropW, usableHeight / cropH);
+      const drawW = cropW * scale;
+      const drawH = cropH * scale;
+
+      const offsetX = (400 - drawW) / 2;
+      const offsetY = (400 - drawH) / 2;
+
+      ctx.clearRect(0, 0, 400, 400);
+      ctx.drawImage(temp, minX, minY, cropW, cropH, offsetX, offsetY, drawW, drawH);
+
+      return canvas.toDataURL('image/png');
+    }
+
+    function downloadImage(base64, filename) {
+      const link = document.createElement('a');
+      link.href = base64;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    processBtn.addEventListener('click', async () => {
+      if (!files.length) return alert("Please upload image(s) first.");
+
+      setBar(processBar, 0);
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const img = await loadImageFromFile(file);
+        const centeredImage = processImage(img);
+        const cleanName = file.name.replace(/\.[^/.]+$/, "");
+        downloadImage(centeredImage, `${cleanName}_centered.png`);
+
+        setBar(processBar, Math.round(((i + 1) / files.length) * 100));
+      }
+    });
+  </script>
 </body>
 </html>
-
